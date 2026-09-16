@@ -6,10 +6,9 @@ the mountain herself: she gets movement and climbing actions, a running
 description of what is around her, and — optionally — a seat in the game's voice
 chat.
 
-BepInGUID: `com.sillyprootsoda.neuropeak`
+yes this massive ass readme is made by claude
 
-> This repository contains **no source comments by design**. Everything that would
-> normally live in a comment lives in this file instead.
+BepInGUID: `com.sillyprootsoda.neuropeak`
 
 ---
 
