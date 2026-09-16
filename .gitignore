@@ -1,0 +1,12 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+.DS_Store
+lib/*.dll
+tools/
+peak-windows/
+neuro-sdk/
+scripts/

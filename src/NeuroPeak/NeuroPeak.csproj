@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net472</TargetFramework>
+        <LangVersion>preview</LangVersion>
+        <Nullable>enable</Nullable>
+        <AssemblyName>NeuroPeak</AssemblyName>
+        <RootNamespace>NeuroPeak</RootNamespace>
+        <Product>Neuro PEAK</Product>
+        <Version>0.1.0</Version>
+        <DebugType>portable</DebugType>
+        <NoWarn>$(NoWarn);CS0436</NoWarn>
+        <GameLibDirectory>$(MSBuildThisFileDirectory)..\..\lib\</GameLibDirectory>
+        <NeuroSdkVoiceSourceDirectory Condition="'$(NeuroSdkVoiceSourceDirectory)' == ''">$(MSBuildThisFileDirectory)..\..\neuro-sdk\Unity\Assets\Voice\</NeuroSdkVoiceSourceDirectory>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BepInEx.Core" Version="5.4.21" PrivateAssets="all" />
+        <PackageReference Include="HarmonyX" Version="2.10.2" PrivateAssets="all" />
+        <PackageReference Include="UnityEngine.Modules" Version="2022.3.62" PrivateAssets="all" IncludeAssets="compile" />
+        <PackageReference Include="VedalAI.NeuroSdk.Unity" Version="2.0.0" />
+        <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="$(GameLibDirectory)*.dll"
+                   Exclude="$(GameLibDirectory)UnityEngine*.dll;$(GameLibDirectory)Unity.*.dll;$(GameLibDirectory)Newtonsoft.Json.dll;$(GameLibDirectory)0Harmony*.dll;$(GameLibDirectory)BepInEx*.dll;$(GameLibDirectory)mscorlib.dll;$(GameLibDirectory)netstandard.dll;$(GameLibDirectory)System*.dll;$(GameLibDirectory)Mono.*.dll">
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+
+    <PropertyGroup Condition="Exists('$(NeuroSdkVoiceSourceDirectory)NeuroVoiceChat.cs')">
+        <DefineConstants>$(DefineConstants);NEUROSDK_VOICE</DefineConstants>
+    </PropertyGroup>
+
+    <ItemGroup Condition="$(DefineConstants.Contains('NEUROSDK_VOICE'))">
+        <Compile Include="$(NeuroSdkVoiceSourceDirectory)*.cs" LinkBase="NeuroSdkVoice" />
+    </ItemGroup>
+
+    <ItemGroup Condition="!$(DefineConstants.Contains('NEUROSDK_VOICE'))">
+        <Compile Remove="Voice\PeakVoiceBridge.cs" />
+    </ItemGroup>
+
+    <PropertyGroup Condition="Exists('$(GameLibDirectory)PhotonVoice.API.dll') And Exists('$(GameLibDirectory)PhotonVoice.dll')">
+        <DefineConstants>$(DefineConstants);PEAK_PHOTON_VOICE</DefineConstants>
+    </PropertyGroup>
+
+    <ItemGroup Condition="!$(DefineConstants.Contains('PEAK_PHOTON_VOICE'))">
+        <Compile Remove="Voice\PhotonVoiceTransmitSink.cs" />
+    </ItemGroup>
+
+    <Target Name="WarnOnMissingGameAssembly" BeforeTargets="CoreCompile"
+            Condition="!Exists('$(GameLibDirectory)Assembly-CSharp.dll')">
+        <Error Code="NEUROPEAK001"
+               Text="lib/Assembly-CSharp.dll was not found. Copy PEAK's game assemblies into the lib/ folder as described in lib/README.md." />
+    </Target>
+
+</Project>

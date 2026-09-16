@@ -1,0 +1,140 @@
+using System;
+using System.Threading;
+using UnityEngine;
+
+namespace NeuroPeak.Core
+{
+    public sealed class PeakStateTracker : MonoBehaviour
+    {
+        private const float MapHandlerLookupInterval = 2f;
+
+        private static PeakPlayerState _current = PeakPlayerState.NotInGame;
+        private static MapHandler? _mapHandler;
+        private static float _lastMapHandlerLookup = -100f;
+
+        public static PeakPlayerState Current => Volatile.Read(ref _current);
+
+        public static Character? LocalCharacter
+        {
+            get
+            {
+                Character local = Character.localCharacter;
+                return local == null ? null : local;
+            }
+        }
+
+        private void Update()
+        {
+            Volatile.Write(ref _current, Capture());
+        }
+
+        private static PeakPlayerState Capture()
+        {
+            Character? character = LocalCharacter;
+            if (character == null) return PeakPlayerState.NotInGame;
+
+            CharacterData data = character.data;
+            if (data == null) return PeakPlayerState.NotInGame;
+
+            PeakPlayerState state = new PeakPlayerState
+            {
+                InGame = true,
+                Grounded = data.isGrounded,
+                SinceGrounded = data.sinceGrounded,
+                SinceJump = data.sinceJump,
+                JumpsRemaining = data.jumpsRemaining,
+                Climbing = data.isClimbing,
+                RopeClimbing = data.isRopeClimbing,
+                VineClimbing = data.isVineClimbing,
+                HoldingClimbHandle = data.currentClimbHandle != null,
+                Crouching = data.isCrouching,
+                Sprinting = data.isSprinting,
+                CurrentStamina = data.currentStamina,
+                ExtraStamina = data.extraStamina,
+                TotalStamina = data.TotalStamina,
+                MaxStamina = character.GetMaxStamina(),
+                OutOfStaminaFor = data.outOfStaminaFor,
+                FullyConscious = data.fullyConscious,
+                PassedOut = data.passedOut,
+                FullyPassedOut = data.fullyPassedOut,
+                Dead = data.dead,
+                InFog = data.isInFog,
+                FallSeconds = data.fallSeconds,
+                Position = character.transform.position,
+                LookDirection = data.lookDirection,
+                LookFlat = data.lookDirection_Flat,
+                LookRight = data.lookDirection_Right,
+                Velocity = data.avarageVelocity
+            };
+
+            state.OutOfStamina = state.CurrentStamina < 0.005f && state.ExtraStamina < 0.001f;
+            state.HeadPosition = HeadPositionOf(character, state.Position);
+
+            Item heldItem = data.currentItem;
+            if (heldItem != null)
+            {
+                state.HoldingItem = true;
+                state.HeldItemName = CleanName(heldItem.name);
+                state.UsingItem = heldItem.isUsingPrimary || heldItem.isUsingSecondary;
+            }
+
+            CharacterAfflictions afflictions = character.refs.afflictions;
+            if (afflictions != null)
+            {
+                state.Injury = afflictions.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Injury);
+                state.StatusSum = afflictions.statusSum;
+            }
+
+            CharacterStats stats = character.refs.stats;
+            if (stats != null) state.AltitudeMeters = stats.heightInMeters;
+
+            state.SegmentName = CurrentSegmentName();
+
+            return state;
+        }
+
+        public static Vector3 HeadPositionOf(Character character, Vector3 fallback)
+        {
+            Bodypart head = character.refs.head;
+            return head != null ? head.transform.position : fallback + Vector3.up;
+        }
+
+        public static Vector3 EyePosition(PeakPlayerState state)
+        {
+            MainCamera camera = MainCamera.instance;
+            return camera != null ? camera.transform.position : state.HeadPosition;
+        }
+
+        private static string CurrentSegmentName()
+        {
+            MapHandler? handler = CachedMapHandler();
+            if (handler == null) return string.Empty;
+
+            try
+            {
+                return handler.GetCurrentSegment().ToString();
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
+        }
+
+        private static MapHandler? CachedMapHandler()
+        {
+            if (_mapHandler != null) return _mapHandler;
+            if (Time.unscaledTime - _lastMapHandlerLookup < MapHandlerLookupInterval) return null;
+
+            _lastMapHandlerLookup = Time.unscaledTime;
+            MapHandler found = UnityEngine.Object.FindObjectOfType<MapHandler>();
+            _mapHandler = found == null ? null : found;
+            return _mapHandler;
+        }
+
+        private static string CleanName(string rawName)
+        {
+            int cloneIndex = rawName.IndexOf("(Clone)", StringComparison.Ordinal);
+            return cloneIndex >= 0 ? rawName.Substring(0, cloneIndex).Trim() : rawName;
+        }
+    }
+}
