@@ -16,6 +16,7 @@ BepInGUID: `com.sillyprootsoda.neuropeak`
 
 - [How it is put together](#how-it-is-put-together)
 - [What has been verified in game](#what-has-been-verified-in-game)
+- [Building and running on Windows](#building-and-running-on-windows)
 - [Building and running on macOS](#building-and-running-on-macos)
 - [Installing BepInEx for PEAK](#installing-bepinex-for-peak)
 - [Getting the game assemblies](#getting-the-game-assemblies)
@@ -172,6 +173,89 @@ the SDK falls back to `EnvironmentVariableTarget.User`, which Mono reads from
 This was confirmed to work: the error disappeared and the game connected to Randy on
 the next launch. Restart the game after changing it, since the URL is only read at
 startup.
+
+---
+
+## Building and running on Windows
+
+PEAK is a Windows game, so this is the straightforward path: no compatibility layer,
+no DLL overrides, and none of the caveats in the macOS section apply.
+
+### Getting the game assemblies
+
+Copy them out of your install into `lib\`. In PowerShell, from the repository root:
+
+```powershell
+$managed = "C:\Program Files (x86)\Steam\steamapps\common\PEAK\PEAK_Data\Managed"
+```
+
+```powershell
+"Assembly-CSharp","PhotonUnityNetworking","PhotonRealtime","Photon3Unity3D","Zorro.Core.Runtime","PhotonVoice.API","PhotonVoice" | ForEach-Object { Copy-Item "$managed\$_.dll" lib\ }
+```
+
+Right-click PEAK in Steam and choose *Manage → Browse local files* if it is installed
+somewhere other than the default library.
+
+### Building
+
+Install the [.NET SDK](https://dotnet.microsoft.com/download) (8 or newer), then:
+
+```powershell
+dotnet restore
+```
+
+```powershell
+dotnet build src\NeuroPeak\NeuroPeak.csproj -c Release
+```
+
+Opening `NeuroPeak.sln` in Visual Studio 2022 or Rider works too. On Windows the
+.NET Framework 4.7.2 targeting pack may already be present; if not, the
+`Microsoft.NETFramework.ReferenceAssemblies` package the project references supplies it.
+
+### Installing
+
+Install [BepInExPack PEAK](https://thunderstore.io/c/peak/p/BepInEx/BepInExPack_PEAK/)
+as described in [Installing BepInEx for PEAK](#installing-bepinex-for-peak), then copy
+the built plugin in:
+
+```powershell
+Copy-Item src\NeuroPeak\bin\Release\net472\NeuroPeak.dll "$env:ProgramFiles(x86)\Steam\steamapps\common\PEAK\BepInEx\plugins\"
+```
+
+No `winhttp` DLL override is needed — that requirement is specific to Wine. The pack's
+`winhttp.dll` proxy works natively.
+
+### Setting NEURO_SDK_WS_URL
+
+Windows Steam launch options cannot set environment variables, so set it for your user
+account instead:
+
+```powershell
+setx NEURO_SDK_WS_URL "ws://localhost:8000"
+```
+
+**Then fully restart Steam.** `setx` only affects processes started afterwards, and the
+game inherits its environment from Steam. Skipping the restart is the most common reason
+the SDK logs `Could not retrieve websocket URL` and gives up without retrying.
+
+To check it took, before launching the game:
+
+```powershell
+[System.Environment]::GetEnvironmentVariable("NEURO_SDK_WS_URL", "User")
+```
+
+### Where the logs are
+
+- `...\steamapps\common\PEAK\BepInEx\LogOutput.log` — BepInEx and this plugin
+- `%USERPROFILE%\AppData\LocalLow\LandCrab\PEAK\Player.log` — Unity, and anything
+  the SDK writes with `Debug.Log`
+
+Check both. The pack ships with `WriteUnityLog = false`, so SDK messages land only in
+`Player.log`.
+
+> Verification for this project was done under CrossOver on macOS, against the same
+> `Assembly-CSharp.dll` that ships on Windows. The Windows path is the mainstream one
+> that BepInExPack PEAK targets, but it has not been exercised here directly.
 
 ---
 
