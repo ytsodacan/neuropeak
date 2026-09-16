@@ -21,6 +21,7 @@ namespace NeuroPeak.Core
         private const float SlopeTolerance = 40f;
 
         private static readonly Collider[] OverlapBuffer = new Collider[64];
+        private static readonly RaycastHit[] RayBuffer = new RaycastHit[32];
 
         public static bool IsClimbableNormal(Vector3 normal)
         {
@@ -88,14 +89,36 @@ namespace NeuroPeak.Core
             return "climbable surface";
         }
 
+        public static bool IsTerrainHit(Collider collider)
+        {
+            if (collider == null) return false;
+            if (collider.GetComponentInParent<Character>() != null) return false;
+            if (collider.GetComponentInParent<Item>() != null) return false;
+            return true;
+        }
+
         private static bool TryCast(Vector3 origin, Vector3 direction, float distance, float radius, out RaycastHit hit)
         {
-            if (radius <= 0f)
+            int count = radius <= 0f
+                ? Physics.RaycastNonAlloc(origin, direction, RayBuffer, distance, ~0, QueryTriggerInteraction.Ignore)
+                : Physics.SphereCastNonAlloc(origin, radius, direction, RayBuffer, distance, ~0, QueryTriggerInteraction.Ignore);
+
+            hit = default(RaycastHit);
+            float nearest = float.MaxValue;
+            bool found = false;
+
+            for (int i = 0; i < count; i++)
             {
-                return Physics.Raycast(origin, direction, out hit, distance, ~0, QueryTriggerInteraction.Ignore);
+                RaycastHit candidate = RayBuffer[i];
+                if (!IsTerrainHit(candidate.collider)) continue;
+                if (candidate.distance >= nearest) continue;
+
+                nearest = candidate.distance;
+                hit = candidate;
+                found = true;
             }
 
-            return Physics.SphereCast(origin, radius, direction, out hit, distance, ~0, QueryTriggerInteraction.Ignore);
+            return found;
         }
     }
 }

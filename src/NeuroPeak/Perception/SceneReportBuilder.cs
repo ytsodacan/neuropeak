@@ -8,6 +8,7 @@ namespace NeuroPeak.Perception
     public static class SceneReportBuilder
     {
         private const int MaxSurfacesReported = 3;
+        private const int MaxThingsReported = 5;
         private const int MaxTeammatesReported = 4;
         private const float MinSurfaceSeparation = 2.5f;
 
@@ -18,45 +19,70 @@ namespace NeuroPeak.Perception
 
             float dropBelow = PeakSurfaceProbe.GroundDistanceBelow(state.Position + Vector3.up * 0.2f);
             List<SurfaceHit> surfaces = FindClimbableSurfaces(state);
+            List<NearbyThing> things = FindNearbyThings(state);
+            AscentReading ascent = PeakTerrainScout.FindWayUp(state);
             List<string> teammates = DescribeTeammates(state);
 
             StringBuilder text = new StringBuilder();
             text.Append("## Around you\n");
             text.Append(Posture(state, dropBelow)).Append('\n');
-            text.Append(StaminaLine(state)).Append('\n');
+            text.Append("World coordinates ").Append(RelativePosition.Coordinates(state.Position))
+                .Append(", facing ").Append(RelativePosition.Compass(state.LookFlat)).Append(".\n");
+            text.Append(Condition(state)).Append('\n');
+
+            if (state.LookingAtSomething)
+            {
+                text.Append("You are looking at ").Append(state.LookingAtName);
+                if (!string.IsNullOrEmpty(state.LookingAtPrompt))
+                {
+                    text.Append(" — you could ").Append(state.LookingAtPrompt.ToLowerInvariant());
+                }
+
+                text.Append(". Use `interact` for that.\n");
+            }
 
             if (surfaces.Count > 0)
             {
-                text.Append("Climbable from here:\n");
+                text.Append("Climbable:\n");
                 foreach (SurfaceHit surface in surfaces)
                 {
                     text.Append("- ").Append(surface.Label).Append(' ')
                         .Append(surface.InReach
-                            ? "directly in front of you, close enough to grab"
-                            : RelativePosition.Describe(state, surface.Point))
+                            ? "right in front of you, close enough to grab"
+                            : RelativePosition.DescribeWithCoordinates(state, surface.Point))
                         .Append('\n');
                 }
             }
             else
             {
-                text.Append("Nothing climbable is within reach of you right now.\n");
+                text.Append("Nothing you could climb is in reach. Try looking around.\n");
             }
+
+            if (things.Count > 0)
+            {
+                text.Append("Nearby:\n");
+                foreach (NearbyThing thing in things)
+                {
+                    text.Append("- ").Append(thing.Description).Append(' ')
+                        .Append(RelativePosition.DescribeWithCoordinates(state, thing.Position)).Append('\n');
+                }
+            }
+
+            text.Append(WayUpLine(state, ascent)).Append('\n');
 
             string hazards = HazardLine(state, dropBelow);
             if (hazards.Length > 0) text.Append(hazards).Append('\n');
+
+            text.Append(InventoryLine(state)).Append('\n');
 
             if (teammates.Count > 0)
             {
                 text.Append("Your team:\n");
                 foreach (string teammate in teammates) text.Append("- ").Append(teammate).Append('\n');
             }
-            else
-            {
-                text.Append("Nobody else is close enough to see.\n");
-            }
 
             report.Description = text.ToString().TrimEnd();
-            report.Digest = BuildDigest(state, dropBelow, surfaces, teammates);
+            report.Digest = BuildDigest(state, dropBelow, surfaces, things, teammates, ascent);
             report.Meaningful = true;
             return report;
         }
@@ -77,16 +103,59 @@ namespace NeuroPeak.Perception
             return $"You are standing on solid ground{altitude}{region}.";
         }
 
-        private static string StaminaLine(PeakPlayerState state)
+        private static string WayUpLine(PeakPlayerState state, AscentReading ascent)
         {
-            int percent = Mathf.RoundToInt(state.StaminaFraction * 100f);
-            if (state.OutOfStamina) return "You have no stamina left.";
-            if (state.StatusSum > 0.05f)
+            if (!ascent.Found)
             {
-                return $"Stamina is at {percent}% and your injuries are holding back {Mathf.RoundToInt(state.StatusSum * 100f)}% of your maximum.";
+                return "The ground around you is flat, so the way on is not obvious from here. Look around for something to climb.";
             }
 
-            return $"Stamina is at {percent}%.";
+            string heading = RelativePosition.CompassOnly(ascent.Direction);
+            string relative = RelativePosition.Bearing(state, ascent.Direction);
+            int gain = Mathf.RoundToInt(ascent.HeightGain);
+
+            return $"The mountain rises to the {heading}, which is {relative} from where you are facing — the ground is about {gain} m higher {Mathf.RoundToInt(ascent.SampleDistance)} m that way. Head there to keep climbing.";
+        }
+
+        private static string Condition(PeakPlayerState state)
+        {
+            int percent = Mathf.RoundToInt(state.StaminaFraction * 100f);
+
+            string stamina = state.OutOfStamina
+                ? "You have nothing left in the tank"
+                : percent >= 85 ? $"You are fresh, {percent}% stamina"
+                : percent >= 40 ? $"Stamina is down to {percent}%"
+                : $"You are running low, only {percent}% stamina";
+
+            if (state.StatusSum <= 0.05f) return stamina + ".";
+
+            int ceiling = Mathf.RoundToInt(Mathf.Max(1f - state.StatusSum, 0f) * 100f);
+            return $"{stamina}, and you are worn down enough that it will not refill past {ceiling}%.";
+        }
+
+        private static string InventoryLine(PeakPlayerState state)
+        {
+            System.Collections.Generic.List<string> carried = new System.Collections.Generic.List<string>();
+            bool hasBackpack = false;
+
+            foreach (InventorySlot slot in state.Inventory)
+            {
+                if (slot.IsBackpack) { hasBackpack = true; continue; }
+                if (slot.Empty) continue;
+                carried.Add($"{slot.Number}: {slot.ItemName}");
+            }
+
+            string held = state.HoldingItem
+                ? $"You are holding the {state.HeldItemName}"
+                : "Your hands are empty, so you can climb";
+
+            if (carried.Count == 0)
+            {
+                return hasBackpack ? $"{held}. Your bag is empty but you are wearing a backpack." : $"{held}, and your bag is empty.";
+            }
+
+            string bag = $"In your bag: {string.Join(", ", carried.ToArray())}";
+            return hasBackpack ? $"{held}. {bag}, plus a backpack." : $"{held}. {bag}.";
         }
 
         private static string HazardLine(PeakPlayerState state, float dropBelow)
@@ -101,11 +170,11 @@ namespace NeuroPeak.Perception
                     : $"a {RelativePosition.FormatDistance(dropBelow)} drop straight below you");
             }
 
-            if (state.InFog) hazards.Add("thick fog, you cannot see far");
-            if (state.Injury > 0.05f) hazards.Add($"you are injured ({Mathf.RoundToInt(state.Injury * 100f)}%)");
-            if (state.PassedOut) hazards.Add("you are passing out");
+            if (state.InFog) hazards.Add("fog thick enough that you cannot see far");
+            if (state.Injury > 0.05f) hazards.Add($"you are hurt ({Mathf.RoundToInt(state.Injury * 100f)}% injured)");
+            if (state.PassedOut) hazards.Add("you are on the edge of passing out");
 
-            return hazards.Count == 0 ? string.Empty : $"Careful: {string.Join(", ", hazards.ToArray())}.";
+            return hazards.Count == 0 ? string.Empty : $"Watch out: {string.Join(", and ", hazards.ToArray())}.";
         }
 
         private static List<SurfaceHit> FindClimbableSurfaces(PeakPlayerState state)
@@ -131,6 +200,7 @@ namespace NeuroPeak.Perception
                 if (toSurface.sqrMagnitude < 0.01f) continue;
 
                 if (!Physics.Raycast(state.HeadPosition, toSurface.normalized, out RaycastHit hit, toSurface.magnitude + 0.3f, ~0, QueryTriggerInteraction.Ignore)) continue;
+                if (!PeakSurfaceProbe.IsTerrainHit(hit.collider)) continue;
                 if (!PeakSurfaceProbe.IsClimbableNormal(hit.normal)) continue;
                 if (TooCloseToExisting(found, hit.point)) continue;
 
@@ -142,6 +212,65 @@ namespace NeuroPeak.Perception
                     Distance = hit.distance,
                     Label = PeakSurfaceProbe.DescribeCollider(hit.collider)
                 });
+            }
+
+            return found;
+        }
+
+        private static List<NearbyThing> FindNearbyThings(PeakPlayerState state)
+        {
+            List<NearbyThing> found = new List<NearbyThing>();
+            List<Transform> seen = new List<Transform>();
+            float radius = (NeuroPeakPlugin.Settings?.NearbyScanRadius.Value ?? 7f) * 2f;
+
+            int count = PeakSurfaceProbe.OverlapNearby(state.HeadPosition, radius, out Collider[] buffer);
+            for (int i = 0; i < count && found.Count < MaxThingsReported; i++)
+            {
+                Collider collider = buffer[i];
+                if (collider == null) continue;
+                if (PeakSurfaceProbe.BelongsToCharacter(collider)) continue;
+
+                string description = string.Empty;
+                Transform owner = collider.transform;
+
+                Item item = collider.GetComponentInParent<Item>();
+                if (item != null)
+                {
+                    owner = item.transform;
+                    description = PeakItemKnowledge.DescribeWithName(item, owner.name);
+                }
+                else
+                {
+                    Campfire campfire = collider.GetComponentInParent<Campfire>();
+                    if (campfire != null)
+                    {
+                        owner = campfire.transform;
+                        description = campfire.Lit ? "a lit campfire, this stretch is checkpointed" : "an unlit campfire, light it to checkpoint here";
+                    }
+                    else
+                    {
+                        IInteractible interactible = collider.GetComponentInParent<IInteractible>();
+                        if (interactible != null)
+                        {
+                            try
+                            {
+                                Transform t = interactible.GetTransform();
+                                if (t != null) owner = t;
+                                string name = interactible.GetName();
+                                if (!string.IsNullOrEmpty(name)) description = name;
+                            }
+                            catch (System.Exception)
+                            {
+                            }
+                        }
+                    }
+                }
+
+                if (description.Length == 0) continue;
+                if (seen.Contains(owner)) continue;
+
+                seen.Add(owner);
+                found.Add(new NearbyThing { Description = description, Position = owner.position });
             }
 
             return found;
@@ -185,11 +314,18 @@ namespace NeuroPeak.Perception
             return described;
         }
 
-        private static string BuildDigest(PeakPlayerState state, float dropBelow, List<SurfaceHit> surfaces, List<string> teammates)
+        private static string BuildDigest(PeakPlayerState state, float dropBelow, List<SurfaceHit> surfaces, List<NearbyThing> things, List<string> teammates, AscentReading ascent)
         {
             StringBuilder digest = new StringBuilder();
             digest.Append(state.SegmentName).Append('|')
+                .Append(state.LookingAtName).Append('|')
+                .Append(state.HeldItemName).Append('|')
+                .Append(state.Inventory.Count).Append('|')
                 .Append(Bucket(state.AltitudeMeters, 10f)).Append('|')
+                .Append(Bucket(state.Position.x, 15f)).Append(',')
+                .Append(Bucket(state.Position.z, 15f)).Append('|')
+                .Append(Bucket(CompassDegrees(state.LookFlat), 45f)).Append('|')
+                .Append(ascent.Found ? RelativePosition.CompassOnly(ascent.Direction) : "flat").Append('|')
                 .Append(PostureKey(state)).Append('|')
                 .Append(Bucket(state.StaminaFraction * 100f, 20f)).Append('|')
                 .Append(Bucket(dropBelow, 10f)).Append('|')
@@ -198,6 +334,8 @@ namespace NeuroPeak.Perception
                 .Append(surfaces.Count).Append('|');
 
             foreach (SurfaceHit surface in surfaces) digest.Append(surface.Label).Append(',');
+            digest.Append('|').Append(things.Count);
+            foreach (NearbyThing thing in things) digest.Append(thing.Description).Append(',');
             digest.Append('|').Append(teammates.Count);
             foreach (string teammate in teammates) digest.Append(teammate).Append(',');
 
@@ -215,6 +353,13 @@ namespace NeuroPeak.Perception
         }
 
         private static int Bucket(float value, float size) => Mathf.RoundToInt(value / size);
+
+        private static float CompassDegrees(Vector3 flatDirection)
+        {
+            Vector3 flat = new Vector3(flatDirection.x, 0f, flatDirection.z);
+            if (flat.sqrMagnitude < 0.0001f) return 0f;
+            return Mathf.Repeat(Mathf.Atan2(flat.x, flat.z) * Mathf.Rad2Deg, 360f);
+        }
 
         private static string Readable(string segmentName)
         {

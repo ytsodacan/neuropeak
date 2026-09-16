@@ -24,6 +24,13 @@ namespace NeuroPeak.Core
         private bool _jumpPending;
         private bool _sprintHeld;
         private bool _sprintStartPending;
+        private bool _interactStartPending;
+        private float _interactUntil;
+        private bool _usePrimaryStartPending;
+        private float _usePrimaryUntil;
+        private bool _useSecondaryStartPending;
+        private float _useSecondaryUntil;
+        private bool _dropPending;
         private bool _lookActive;
         private bool _lookHorizontal;
         private float _lookRemaining;
@@ -62,6 +69,26 @@ namespace NeuroPeak.Core
 
         public void StopLooking() => _lookActive = false;
 
+        public void Interact(float holdSeconds)
+        {
+            _interactStartPending = true;
+            _interactUntil = Time.time + Mathf.Max(holdSeconds, 0.1f);
+        }
+
+        public void UsePrimary(float holdSeconds)
+        {
+            _usePrimaryStartPending = true;
+            _usePrimaryUntil = Time.time + Mathf.Max(holdSeconds, 0.1f);
+        }
+
+        public void UseSecondary(float holdSeconds)
+        {
+            _useSecondaryStartPending = true;
+            _useSecondaryUntil = Time.time + Mathf.Max(holdSeconds, 0.1f);
+        }
+
+        public void DropItem() => _dropPending = true;
+
         public void Jump() => _jumpPending = true;
 
         public void Grab(float holdSeconds)
@@ -94,6 +121,10 @@ namespace NeuroPeak.Core
             _sprintHeld = false;
             _sprintStartPending = false;
             _lookActive = false;
+            _interactUntil = 0f;
+            _usePrimaryUntil = 0f;
+            _useSecondaryUntil = 0f;
+            _dropPending = false;
         }
 
         internal void ApplyTo(Character character, CharacterInput input)
@@ -125,6 +156,42 @@ namespace NeuroPeak.Core
                 input.usePrimaryWasPressed = false;
                 input.usePrimaryWasReleased = true;
                 _releasePending = false;
+            }
+
+            if (Time.time < _interactUntil)
+            {
+                input.interactIsPressed = true;
+                if (_interactStartPending)
+                {
+                    input.interactWasPressed = true;
+                    _interactStartPending = false;
+                }
+            }
+
+            if (Time.time < _usePrimaryUntil)
+            {
+                input.usePrimaryIsPressed = true;
+                if (_usePrimaryStartPending)
+                {
+                    input.usePrimaryWasPressed = true;
+                    _usePrimaryStartPending = false;
+                }
+            }
+
+            if (Time.time < _useSecondaryUntil)
+            {
+                input.useSecondaryIsPressed = true;
+                if (_useSecondaryStartPending)
+                {
+                    input.useSecondaryWasPressed = true;
+                    _useSecondaryStartPending = false;
+                }
+            }
+
+            if (_dropPending)
+            {
+                input.dropWasPressed = true;
+                _dropPending = false;
             }
 
             if (_sprintHeld)

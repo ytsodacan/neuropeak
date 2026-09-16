@@ -48,6 +48,37 @@ namespace NeuroPeak.Core
             return "level with you";
         }
 
+        public static string Compass(Vector3 flatDirection)
+        {
+            Vector3 flat = new Vector3(flatDirection.x, 0f, flatDirection.z);
+            if (flat.sqrMagnitude < 0.0001f) return "nowhere in particular";
+
+            float heading = Mathf.Repeat(Mathf.Atan2(flat.x, flat.z) * Mathf.Rad2Deg, 360f);
+            string[] points = { "north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west" };
+            int index = Mathf.RoundToInt(heading / 45f) % points.Length;
+            return $"{points[index]} ({Mathf.RoundToInt(heading)} degrees)";
+        }
+
+        public static string CompassOnly(Vector3 flatDirection)
+        {
+            Vector3 flat = new Vector3(flatDirection.x, 0f, flatDirection.z);
+            if (flat.sqrMagnitude < 0.0001f) return "nowhere";
+
+            float heading = Mathf.Repeat(Mathf.Atan2(flat.x, flat.z) * Mathf.Rad2Deg, 360f);
+            string[] points = { "north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west" };
+            return points[Mathf.RoundToInt(heading / 45f) % points.Length];
+        }
+
+        public static string DescribeWithCoordinates(PeakPlayerState state, Vector3 target)
+        {
+            return $"{Describe(state, target)}, at {Coordinates(target)}";
+        }
+
+        public static string Coordinates(Vector3 position)
+        {
+            return $"x {Mathf.RoundToInt(position.x)}, y {Mathf.RoundToInt(position.y)}, z {Mathf.RoundToInt(position.z)}";
+        }
+
         public static string FormatDistance(float metres)
         {
             if (metres < 1f) return "under a metre";

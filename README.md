@@ -19,6 +19,10 @@ BepInGUID: `com.sillyprootsoda.neuropeak`
 | `grab` | `hold_seconds`: 0.2–20 |
 | `release` | — |
 | `sprint` | `enabled`: true/false |
+| `interact` | `hold_seconds`: 0.1–10 — pick up, open chests, light campfires |
+| `select_slot` | `slot`: 0–8, where 0 puts your hands away |
+| `use_item` | `mode`: primary/secondary, `hold_seconds`: 0.1–15 |
+| `drop_item` | — |
 
 Everything is validated against the real game state before it runs, and failures come
 back as something she can act on — "You just jumped, wait a moment before jumping again"
@@ -45,21 +49,35 @@ non-silent context messages instead.
 The Neuro API is text-only, so the plugin describes the scene in prose:
 
 ```
-## Around you
-You are hanging off a rock face at about 214 m up in the Tropics, 31 m above the ground.
-Stamina is at 45%.
-Climbable from here:
-- rock face directly in front of you, close enough to grab
-- root ahead and to your right, 3 m above, 4 m
-Careful: a 31 m drop straight below you.
-Your team:
-- Vedal is climbing, behind and to your left, 2 m below, 6 m
+You are standing on solid ground at about 49 m up in the Beach.
+World coordinates x 124, y 87, z -302, facing north-east (48 degrees).
+You are fresh, 100% stamina.
+You are looking at Wooden Chest — you could open it. Use `interact` for that.
+Climbable:
+- rock face ahead and to your left, level with you, 4 m, at x 119, y 87, z -298
+Nearby:
+- Berry (food, restores 15% hunger) behind you, 6 m, at x 130, y 86, z -305
+- an unlit campfire, light it to checkpoint here ahead, 9 m, at x 118, y 94, z -290
+The mountain rises to the north-east, which is ahead and to your right from where you
+are facing — the ground is about 7 m higher 14 m that way. Head there to keep climbing.
+You are holding the Passport (just your passport, no use on the mountain).
+In your bag: 2: Berry (food, restores 15% hunger).
 ```
 
+Item effects are read off the prefabs' own components, so the numbers are the game's
+rather than guesses — `Action_RestoreHunger`, `Action_ModifyStatus` and friends. About
+twenty-five other effects are recognised by component, which is how a mushroom ends up
+described as "the effect is a gamble" and `Action_Die` as "kills you, do not use it".
+
+The way up is worked out by sampling ground height in eight directions around her and
+reporting whichever climbs fastest. Without it she has no idea which way the mountain
+goes and wanders along the contour.
+
 It only sends when something meaningful changes, not on a timer — she reacts badly to
-being spammed. Things that need a reaction (fall damage, stamina running out, a
-checkpoint, a teammate going down, a long drop opening up underneath her) are sent
-non-silently so she actually responds.
+being spammed. Position feeds the change detector on a coarse grid rather than raw, or
+every footstep would count as news. Things that need a reaction (fall damage, stamina
+running out, a checkpoint, a teammate going down, a long drop opening up underneath
+her) are sent non-silently so she actually responds.
 
 ## Voice chat
 

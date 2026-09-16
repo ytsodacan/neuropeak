@@ -16,7 +16,11 @@ namespace NeuroPeak.Actions
             JumpAction.ActionName,
             GrabAction.ActionName,
             ReleaseAction.ActionName,
-            SprintAction.ActionName
+            SprintAction.ActionName,
+            InteractAction.ActionName,
+            UseItemAction.ActionName,
+            SelectSlotAction.ActionName,
+            DropItemAction.ActionName
         };
 
         private bool _registered;
@@ -90,22 +94,31 @@ namespace NeuroPeak.Actions
                 new JumpAction(),
                 new GrabAction(),
                 new ReleaseAction(),
-                new SprintAction());
+                new SprintAction(),
+                new InteractAction(),
+                new UseItemAction(),
+                new SelectSlotAction(),
+                new DropItemAction());
         }
 
         private static string ControlBriefing()
         {
             return
-                "## You are climbing in PEAK\n" +
-                "You and your friends have to climb a mountain together, from the beach at the bottom to the peak at the top.\n" +
-                "- `move` walks you in a direction relative to where you are facing, for up to two seconds at a time.\n" +
-                "- `look` turns your head. Face a wall before you try to grab it.\n" +
-                "- `jump` only works with your feet on the ground.\n" +
-                "- `grab` latches onto rock, roots, ropes and vines you are looking at, within arm's reach. Holding on drains stamina.\n" +
-                "- `sprint` runs on the ground, and pulls you upwards while you are holding a wall.\n" +
-                "- `release` lets go. If you let go high up, you fall and take damage.\n" +
-                "Stamina refills when you stand on solid ground. If it runs out while you are holding a wall, you drop.\n" +
-                "I will describe what is around you as you climb.";
+                "## You are climbing PEAK\n" +
+                "You and your friends are climbing a mountain, from the beach at the bottom up to the summit. " +
+                "It is a long way up and you cannot do it without resting, eating, and using what you find on the way.\n\n" +
+                "**Getting around.** `move` walks you in a direction relative to where you are facing. `look` turns your " +
+                "head, and you need it constantly, because almost everything else depends on what is in front of you. " +
+                "`jump` only works with your feet on the ground.\n\n" +
+                "**Climbing.** Face a wall and `grab` to latch on, then `move` to pull yourself along it. `sprint` while " +
+                "holding on gives you a hard push upwards. `release` lets go, and if you are high up that means falling. " +
+                "You need empty hands to climb, so put your item away first.\n\n" +
+                "**Stuff.** `interact` picks things up, opens chests and lights campfires. `select_slot` takes something " +
+                "out of your bag, `use_item` eats or uses it, `drop_item` throws it away.\n\n" +
+                "**Staying alive.** Holding onto a wall burns stamina fast, and when it runs out you fall. Stamina comes " +
+                "back on solid ground. Hunger, cold and injuries all shrink how much stamina you can have at all, so eat " +
+                "when you find food. Campfires are checkpoints, so lighting one matters.\n\n" +
+                "I will tell you what is around you as you go.";
         }
     }
 }

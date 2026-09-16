@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace NeuroPeak.Core
@@ -42,6 +43,14 @@ namespace NeuroPeak.Core
         public Vector3 LookRight = Vector3.right;
         public Vector3 Velocity;
         public string SegmentName = string.Empty;
+        public List<InventorySlot> Inventory = new List<InventorySlot>();
+        public int SelectedSlotNumber = -1;
+        public bool LookingAtSomething;
+        public string LookingAtName = string.Empty;
+        public string LookingAtPrompt = string.Empty;
+        public bool CanInteract;
+
+        public bool HasFreeHands => !HoldingItem;
 
         public bool ClimbingAnything => Climbing || RopeClimbing || VineClimbing;
 

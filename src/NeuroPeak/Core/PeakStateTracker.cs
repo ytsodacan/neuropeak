@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
 
@@ -74,7 +75,7 @@ namespace NeuroPeak.Core
             if (heldItem != null)
             {
                 state.HoldingItem = true;
-                state.HeldItemName = CleanName(heldItem.name);
+                state.HeldItemName = PeakItemKnowledge.DescribeWithName(heldItem, CleanName(heldItem.name));
                 state.UsingItem = heldItem.isUsingPrimary || heldItem.isUsingSecondary;
             }
 
@@ -89,8 +90,87 @@ namespace NeuroPeak.Core
             if (stats != null) state.AltitudeMeters = stats.heightInMeters;
 
             state.SegmentName = CurrentSegmentName();
+            CaptureInventory(character, state);
+            CaptureLookTarget(state);
 
             return state;
+        }
+
+        private static void CaptureInventory(Character character, PeakPlayerState state)
+        {
+            try
+            {
+                Player player = character.player;
+                if (player == null || player.itemSlots == null) return;
+
+                CharacterItems items = character.refs.items;
+                int selected = items != null && items.currentSelectedSlot.IsSome ? items.currentSelectedSlot.Value : -1;
+                state.SelectedSlotNumber = selected >= 0 ? selected + 1 : -1;
+
+                for (int i = 0; i < player.itemSlots.Length; i++)
+                {
+                    ItemSlot slot = player.itemSlots[i];
+                    if (slot == null) continue;
+
+                    bool empty = slot.IsEmpty();
+                    state.Inventory.Add(new InventorySlot
+                    {
+                        Number = i + 1,
+                        Empty = empty,
+                        ItemName = empty ? string.Empty : DescribeSlotItem(slot),
+                        Selected = i == selected,
+                        IsBackpack = false
+                    });
+                }
+
+                BackpackSlot backpack = player.GetBackpackSlot();
+                if (backpack != null && !backpack.IsEmpty())
+                {
+                    state.Inventory.Add(new InventorySlot
+                    {
+                        Number = 0,
+                        Empty = false,
+                        ItemName = "backpack",
+                        Selected = false,
+                        IsBackpack = true
+                    });
+                }
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        private static string DescribeSlotItem(ItemSlot slot)
+        {
+            try
+            {
+                return PeakItemKnowledge.DescribeWithName(slot.prefab, CleanName(slot.GetPrefabName()));
+            }
+            catch (Exception)
+            {
+                return "something";
+            }
+        }
+
+        private static void CaptureLookTarget(PeakPlayerState state)
+        {
+            try
+            {
+                Interaction interaction = Interaction.instance;
+                if (interaction == null) return;
+
+                IInteractible hovered = interaction.currentHovered;
+                if (hovered == null) return;
+
+                state.CanInteract = true;
+                state.LookingAtSomething = true;
+                state.LookingAtName = hovered.GetName() ?? string.Empty;
+                state.LookingAtPrompt = hovered.GetInteractionText() ?? string.Empty;
+            }
+            catch (Exception)
+            {
+            }
         }
 
         public static Vector3 HeadPositionOf(Character character, Vector3 fallback)
