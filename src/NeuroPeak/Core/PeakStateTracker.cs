@@ -84,12 +84,16 @@ namespace NeuroPeak.Core
             {
                 state.Injury = afflictions.GetCurrentStatus(CharacterAfflictions.STATUSTYPE.Injury);
                 state.StatusSum = afflictions.statusSum;
+                state.Afflictions = PeakAfflictions.Read(character);
             }
 
             CharacterStats stats = character.refs.stats;
             if (stats != null) state.AltitudeMeters = stats.heightInMeters;
 
             state.SegmentName = CurrentSegmentName();
+            state.InRun = DetectRun();
+            state.Reaching = data.isReaching;
+            CaptureReachingTeammate(character, state);
             CaptureInventory(character, state);
             CaptureLookTarget(state);
 
@@ -126,6 +130,7 @@ namespace NeuroPeak.Core
                 BackpackSlot backpack = player.GetBackpackSlot();
                 if (backpack != null && !backpack.IsEmpty())
                 {
+                    state.WearingBackpack = true;
                     state.Inventory.Add(new InventorySlot
                     {
                         Number = 0,
@@ -153,6 +158,36 @@ namespace NeuroPeak.Core
             }
         }
 
+        private static void CaptureReachingTeammate(Character character, PeakPlayerState state)
+        {
+            try
+            {
+                List<Character> all = Character.AllCharacters;
+                if (all == null) return;
+
+                float nearest = float.MaxValue;
+
+                for (int i = 0; i < all.Count; i++)
+                {
+                    Character other = all[i];
+                    if (other == null || other == character) continue;
+
+                    CharacterData otherData = other.data;
+                    if (otherData == null || !otherData.isReaching) continue;
+
+                    float distance = Vector3.Distance(other.transform.position, state.Position);
+                    if (distance >= nearest) continue;
+
+                    nearest = distance;
+                    state.ReachingTeammate = other.characterName;
+                    state.ReachingTeammateDistance = distance;
+                }
+            }
+            catch (Exception)
+            {
+            }
+        }
+
         private static void CaptureLookTarget(PeakPlayerState state)
         {
             try
@@ -167,6 +202,7 @@ namespace NeuroPeak.Core
                 state.LookingAtSomething = true;
                 state.LookingAtName = hovered.GetName() ?? string.Empty;
                 state.LookingAtPrompt = hovered.GetInteractionText() ?? string.Empty;
+                state.LookingAtBackpack = state.LookingAtName.IndexOf("backpack", StringComparison.OrdinalIgnoreCase) >= 0;
             }
             catch (Exception)
             {
@@ -183,6 +219,21 @@ namespace NeuroPeak.Core
         {
             MainCamera camera = MainCamera.instance;
             return camera != null ? camera.transform.position : state.HeadPosition;
+        }
+
+        private static bool DetectRun()
+        {
+            if (CachedMapHandler() != null) return true;
+
+            try
+            {
+                RunManager runManager = RunManager.Instance;
+                return runManager != null && runManager.TimeSinceRunStarted > 0f;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         private static string CurrentSegmentName()

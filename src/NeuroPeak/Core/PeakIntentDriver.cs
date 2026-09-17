@@ -31,6 +31,13 @@ namespace NeuroPeak.Core
         private bool _useSecondaryStartPending;
         private float _useSecondaryUntil;
         private bool _dropPending;
+        private bool _crouchHeld;
+        private bool _crouchStartPending;
+        private bool _pingPending;
+        private bool _backpackPending;
+        private float _throwChargeUntil;
+        private bool _throwStartPending;
+        private bool _throwReleasePending;
         private bool _lookActive;
         private bool _lookHorizontal;
         private float _lookRemaining;
@@ -87,6 +94,25 @@ namespace NeuroPeak.Core
             _useSecondaryUntil = Time.time + Mathf.Max(holdSeconds, 0.1f);
         }
 
+        public void Reach(float holdSeconds) => UseSecondary(holdSeconds);
+
+        public void SetCrouch(bool enabled)
+        {
+            if (enabled && !_crouchHeld) _crouchStartPending = true;
+            _crouchHeld = enabled;
+        }
+
+        public void Ping() => _pingPending = true;
+
+        public void OpenBackpack() => _backpackPending = true;
+
+        public void ThrowItem(float chargeSeconds)
+        {
+            _throwStartPending = true;
+            _throwReleasePending = false;
+            _throwChargeUntil = Time.time + Mathf.Clamp(chargeSeconds, 0.2f, 3f);
+        }
+
         public void DropItem() => _dropPending = true;
 
         public void Jump() => _jumpPending = true;
@@ -125,6 +151,13 @@ namespace NeuroPeak.Core
             _usePrimaryUntil = 0f;
             _useSecondaryUntil = 0f;
             _dropPending = false;
+            _crouchHeld = false;
+            _crouchStartPending = false;
+            _pingPending = false;
+            _backpackPending = false;
+            _throwChargeUntil = 0f;
+            _throwStartPending = false;
+            _throwReleasePending = false;
         }
 
         internal void ApplyTo(Character character, CharacterInput input)
@@ -192,6 +225,45 @@ namespace NeuroPeak.Core
             {
                 input.dropWasPressed = true;
                 _dropPending = false;
+            }
+
+            if (Time.time < _throwChargeUntil)
+            {
+                input.dropIsPressed = true;
+                if (_throwStartPending)
+                {
+                    input.dropWasPressed = true;
+                    _throwStartPending = false;
+                    _throwReleasePending = true;
+                }
+            }
+            else if (_throwReleasePending)
+            {
+                input.dropIsPressed = false;
+                input.dropWasReleased = true;
+                _throwReleasePending = false;
+            }
+
+            if (_crouchHeld)
+            {
+                input.crouchIsPressed = true;
+                if (_crouchStartPending)
+                {
+                    input.crouchWasPressed = true;
+                    _crouchStartPending = false;
+                }
+            }
+
+            if (_pingPending)
+            {
+                input.pingWasPressed = true;
+                _pingPending = false;
+            }
+
+            if (_backpackPending)
+            {
+                input.selectBackpackWasPressed = true;
+                _backpackPending = false;
             }
 
             if (_sprintHeld)

@@ -8,6 +8,7 @@ namespace NeuroPeak.Core
         public static readonly PeakPlayerState NotInGame = new PeakPlayerState();
 
         public bool InGame;
+        public bool InRun;
         public bool Grounded;
         public float SinceGrounded;
         public float SinceJump;
@@ -34,6 +35,7 @@ namespace NeuroPeak.Core
         public string HeldItemName = string.Empty;
         public float Injury;
         public float StatusSum;
+        public List<AfflictionReading> Afflictions = new List<AfflictionReading>();
         public float AltitudeMeters;
         public float FallSeconds;
         public Vector3 Position;
@@ -49,6 +51,11 @@ namespace NeuroPeak.Core
         public string LookingAtName = string.Empty;
         public string LookingAtPrompt = string.Empty;
         public bool CanInteract;
+        public bool WearingBackpack;
+        public bool LookingAtBackpack;
+        public bool Reaching;
+        public string ReachingTeammate = string.Empty;
+        public float ReachingTeammateDistance;
 
         public bool HasFreeHands => !HoldingItem;
 

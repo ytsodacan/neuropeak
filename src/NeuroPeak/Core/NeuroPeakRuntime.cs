@@ -25,6 +25,7 @@ namespace NeuroPeak.Core
             _runtime.AddComponent<PeakIntentDriver>();
             _runtime.AddComponent<NeuroPeakActionRegistry>();
             _runtime.AddComponent<EnvironmentReporter>();
+            _runtime.AddComponent<WeatherReporter>();
 
             InstallVoiceBridge();
             InstallVoiceTransmitSink();

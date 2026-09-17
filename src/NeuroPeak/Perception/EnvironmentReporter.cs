@@ -37,7 +37,7 @@ namespace NeuroPeak.Perception
             if (Time.unscaledTime < _nextScanAt) return;
             _nextScanAt = Time.unscaledTime + (settings?.PerceptionScanInterval.Value ?? 0.4f);
 
-            ReportUrgentConditions(state, settings);
+            if (state.InRun) ReportUrgentConditions(state, settings);
             ReportAmbientChange(state, settings);
         }
 
@@ -86,6 +86,39 @@ namespace NeuroPeak.Perception
             }
 
             ReportDownedTeammate(state);
+            ReportReachingTeammate(state);
+            ReportHunters(state);
+        }
+
+        private static void ReportHunters(PeakPlayerState state)
+        {
+            System.Collections.Generic.List<ThreatReading> threats = PeakThreats.Scan(state);
+            bool anySevere = false;
+
+            for (int i = 0; i < threats.Count; i++)
+            {
+                ThreatReading threat = threats[i];
+                if (!threat.Severe) continue;
+
+                anySevere = true;
+                float distance = Vector3.Distance(threat.Position, state.Position);
+                UrgentContext.Report($"{UrgentContext.HunterKey}:{threat.Description}",
+                    $"{char.ToUpperInvariant(threat.Description[0])}{threat.Description.Substring(1)}, {RelativePosition.FormatDistance(distance)} away, {RelativePosition.Bearing(state, threat.Position - state.HeadPosition)}. Get away from it or get somewhere it cannot follow.");
+            }
+
+            if (!anySevere) UrgentContext.Forget(UrgentContext.HunterKey);
+        }
+
+        private static void ReportReachingTeammate(PeakPlayerState state)
+        {
+            if (string.IsNullOrEmpty(state.ReachingTeammate))
+            {
+                UrgentContext.Forget(UrgentContext.HandOutKey);
+                return;
+            }
+
+            UrgentContext.Report(UrgentContext.HandOutKey,
+                $"{state.ReachingTeammate} has their hand out towards you, {RelativePosition.FormatDistance(state.ReachingTeammateDistance)} away. Use `reach` with empty hands to grab them.");
         }
 
         private static void ReportDownedTeammate(PeakPlayerState state)

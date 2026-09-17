@@ -23,6 +23,11 @@ BepInGUID: `com.sillyprootsoda.neuropeak`
 | `select_slot` | `slot`: 0–8, where 0 puts your hands away |
 | `use_item` | `mode`: primary/secondary, `hold_seconds`: 0.1–15 |
 | `drop_item` | — |
+| `throw_item` | `charge_seconds`: 0.2–3 — lob it at what you're looking at |
+| `reach` | `hold_seconds`: 0.2–10 — put a hand out to grab a teammate |
+| `open_backpack` | — |
+| `crouch` | `enabled`: true/false |
+| `ping` | — mark what you're looking at for your team |
 
 Everything is validated against the real game state before it runs, and failures come
 back as something she can act on — "You just jumped, wait a moment before jumping again"
@@ -49,35 +54,43 @@ non-silent context messages instead.
 The Neuro API is text-only, so the plugin describes the scene in prose:
 
 ```
-You are standing on solid ground at about 49 m up in the Beach.
+You are standing on solid ground at about 49 m up in the Alpine.
 World coordinates x 124, y 87, z -302, facing north-east (48 degrees).
-You are fresh, 100% stamina.
+Stamina is down to 45%, plus 20% bonus stamina on top that does not refill once it is gone.
+You are worn down enough that stamina will not refill past 82%.
+What is wrong with you: Hunger 34% — eat something; Cold 12% — get warm, a campfire or a torch helps.
+It is afternoon on day 2 in the Alpine, and a snowstorm is about 40 seconds away.
+The gloom is rising below you, about 60 m down. It will not stop, so do not go back that way.
 You are looking at Wooden Chest — you could open it. Use `interact` for that.
 Climbable:
 - rock face ahead and to your left, level with you, 4 m, at x 119, y 87, z -298
 Nearby:
 - Berry (food, restores 15% hunger) behind you, 6 m, at x 130, y 86, z -305
-- an unlit campfire, light it to checkpoint here ahead, 9 m, at x 118, y 94, z -290
+Danger:
+- Cactus Large — touching it gives you Thorns, ahead and to your right, 5 m
+- The Scoutmaster is hunting you, 18 m away, behind and to your left
 The mountain rises to the north-east, which is ahead and to your right from where you
 are facing — the ground is about 7 m higher 14 m that way. Head there to keep climbing.
+Vedal has a hand out, 3 m away. Use `reach` to grab them.
 You are holding the Passport (just your passport, no use on the mountain).
-In your bag: 2: Berry (food, restores 15% hunger).
+In your bag: 2: Berry (food, restores 15% hunger). You are wearing a backpack.
 ```
 
-Item effects are read off the prefabs' own components, so the numbers are the game's
-rather than guesses — `Action_RestoreHunger`, `Action_ModifyStatus` and friends. About
-twenty-five other effects are recognised by component, which is how a mushroom ends up
-described as "the effect is a gamble" and `Action_Die` as "kills you, do not use it".
+Nothing there is hardcoded knowledge about PEAK's content. Item effects come off the
+prefabs' own components (`Action_RestoreHunger`, `Action_ModifyStatus` and friends), so
+the numbers are the game's. Hazards are found by looking for any component carrying a
+`STATUSTYPE` field — which is how PEAK implements all of them — so cacti, spores, thorns
+and anything added in a future update are all picked up without naming them. The way up
+is worked out by sampling ground height in eight directions around her.
 
-The way up is worked out by sampling ground height in eight directions around her and
-reporting whichever climbs fastest. Without it she has no idea which way the mountain
-goes and wanders along the contour.
+In the lobby she gets a much shorter report instead, with no weather, no hazards and no
+talk of climbing, because none of that applies before a run starts.
 
 It only sends when something meaningful changes, not on a timer — she reacts badly to
 being spammed. Position feeds the change detector on a coarse grid rather than raw, or
 every footstep would count as news. Things that need a reaction (fall damage, stamina
-running out, a checkpoint, a teammate going down, a long drop opening up underneath
-her) are sent non-silently so she actually responds.
+running out, a checkpoint, a storm arriving, the gloom closing in, a teammate reaching
+for her, something hunting her) are sent non-silently so she actually responds.
 
 ## Voice chat
 

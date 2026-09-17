@@ -16,11 +16,14 @@ namespace NeuroPeak.Perception
         {
             SceneReport report = new SceneReport();
             if (!state.InGame) return report;
+            if (!state.InRun) return BuildLobbyReport(state);
 
             float dropBelow = PeakSurfaceProbe.GroundDistanceBelow(state.Position + Vector3.up * 0.2f);
             List<SurfaceHit> surfaces = FindClimbableSurfaces(state);
             List<NearbyThing> things = FindNearbyThings(state);
             AscentReading ascent = PeakTerrainScout.FindWayUp(state);
+            WeatherSnapshot weather = PeakWeather.Read(state);
+            List<ThreatReading> threats = PeakThreats.Scan(state);
             List<string> teammates = DescribeTeammates(state);
 
             StringBuilder text = new StringBuilder();
@@ -29,6 +32,11 @@ namespace NeuroPeak.Perception
             text.Append("World coordinates ").Append(RelativePosition.Coordinates(state.Position))
                 .Append(", facing ").Append(RelativePosition.Compass(state.LookFlat)).Append(".\n");
             text.Append(Condition(state)).Append('\n');
+            string afflictions = AfflictionLine(state);
+            if (afflictions.Length > 0) text.Append(afflictions).Append('\n');
+            text.Append(WeatherLine(weather)).Append('\n');
+            string rising = RisingHazardLine(weather);
+            if (rising.Length > 0) text.Append(rising).Append('\n');
 
             if (state.LookingAtSomething)
             {
@@ -70,10 +78,27 @@ namespace NeuroPeak.Perception
 
             text.Append(WayUpLine(state, ascent)).Append('\n');
 
+            if (threats.Count > 0)
+            {
+                text.Append("Danger:\n");
+                foreach (ThreatReading threat in threats)
+                {
+                    text.Append("- ").Append(threat.Description).Append(' ')
+                        .Append(RelativePosition.Describe(state, threat.Position)).Append('\n');
+                }
+            }
+
             string hazards = HazardLine(state, dropBelow);
             if (hazards.Length > 0) text.Append(hazards).Append('\n');
 
             text.Append(InventoryLine(state)).Append('\n');
+
+            if (!string.IsNullOrEmpty(state.ReachingTeammate))
+            {
+                text.Append(state.ReachingTeammate).Append(" has a hand out, ")
+                    .Append(RelativePosition.FormatDistance(state.ReachingTeammateDistance))
+                    .Append(" away. Use `reach` to grab them.\n");
+            }
 
             if (teammates.Count > 0)
             {
@@ -82,7 +107,56 @@ namespace NeuroPeak.Perception
             }
 
             report.Description = text.ToString().TrimEnd();
-            report.Digest = BuildDigest(state, dropBelow, surfaces, things, teammates, ascent);
+            report.Digest = BuildDigest(state, dropBelow, surfaces, things, teammates, ascent, weather, threats);
+            report.Meaningful = true;
+            return report;
+        }
+
+        private static SceneReport BuildLobbyReport(PeakPlayerState state)
+        {
+            SceneReport report = new SceneReport();
+            StringBuilder text = new StringBuilder();
+
+            text.Append("## In the lobby\n");
+            text.Append("You are waiting before the climb, not on the mountain yet. Nothing here can hurt you.\n");
+
+            if (state.LookingAtSomething)
+            {
+                text.Append("You are looking at ").Append(state.LookingAtName);
+                if (!string.IsNullOrEmpty(state.LookingAtPrompt))
+                {
+                    text.Append(" — you could ").Append(state.LookingAtPrompt.ToLowerInvariant());
+                }
+
+                text.Append(". Use `interact` for that.\n");
+            }
+
+            List<NearbyThing> things = FindNearbyThings(state);
+            if (things.Count > 0)
+            {
+                text.Append("Nearby:\n");
+                foreach (NearbyThing thing in things)
+                {
+                    text.Append("- ").Append(thing.Description).Append(' ')
+                        .Append(RelativePosition.Describe(state, thing.Position)).Append('\n');
+                }
+            }
+
+            text.Append(InventoryLine(state)).Append('\n');
+
+            List<string> teammates = DescribeTeammates(state);
+            if (teammates.Count > 0)
+            {
+                text.Append("Here with you:\n");
+                foreach (string teammate in teammates) text.Append("- ").Append(teammate).Append('\n');
+            }
+            else
+            {
+                text.Append("Nobody else is here yet.\n");
+            }
+
+            report.Description = text.ToString().TrimEnd();
+            report.Digest = $"lobby|{state.LookingAtName}|{things.Count}|{teammates.Count}|{state.HeldItemName}";
             report.Meaningful = true;
             return report;
         }
@@ -117,6 +191,40 @@ namespace NeuroPeak.Perception
             return $"The mountain rises to the {heading}, which is {relative} from where you are facing — the ground is about {gain} m higher {Mathf.RoundToInt(ascent.SampleDistance)} m that way. Head there to keep climbing.";
         }
 
+        private static string WeatherLine(WeatherSnapshot weather)
+        {
+            string where = string.IsNullOrEmpty(weather.BiomeName) ? string.Empty : $" in the {weather.BiomeName}";
+            string time = weather.Known
+                ? $"It is {weather.PartOfDay} on day {weather.DayCount + 1}{where}"
+                : $"You cannot tell the time of day{where}";
+
+            if (weather.StormActive)
+            {
+                return $"{time}, and the {weather.StormFlavour} is on you — the wind is pulling at you and holding on burns stamina much faster.";
+            }
+
+            if (weather.StormSystemPresent && weather.SecondsUntilStorm > 0f && weather.SecondsUntilStorm <= 90f)
+            {
+                return $"{time}, and a {weather.StormFlavour} is about {Mathf.RoundToInt(weather.SecondsUntilStorm)} seconds away.";
+            }
+
+            if (weather.InWindZone) return $"{time}, and you are on an exposed stretch where the wind picks up.";
+            return $"{time}, and the weather is calm.";
+        }
+
+        private static string RisingHazardLine(WeatherSnapshot weather)
+        {
+            if (!weather.RisingHazard || !weather.RisingHazardStarted) return string.Empty;
+
+            int below = Mathf.RoundToInt(weather.RisingHazardHeightBelow);
+            if (below <= 5)
+            {
+                return $"{weather.RisingHazardName} is right below your feet and still rising. Climb.";
+            }
+
+            return $"{weather.RisingHazardName} is rising below you, about {below} m down. It will not stop, so do not go back that way.";
+        }
+
         private static string Condition(PeakPlayerState state)
         {
             int percent = Mathf.RoundToInt(state.StaminaFraction * 100f);
@@ -127,10 +235,21 @@ namespace NeuroPeak.Perception
                 : percent >= 40 ? $"Stamina is down to {percent}%"
                 : $"You are running low, only {percent}% stamina";
 
+            if (state.ExtraStamina > 0.01f)
+            {
+                stamina += $", plus {Mathf.RoundToInt(state.ExtraStamina * 100f)}% bonus stamina on top that does not refill once it is gone";
+            }
+
             if (state.StatusSum <= 0.05f) return stamina + ".";
 
             int ceiling = Mathf.RoundToInt(Mathf.Max(1f - state.StatusSum, 0f) * 100f);
-            return $"{stamina}, and you are worn down enough that it will not refill past {ceiling}%.";
+            return $"{stamina}. You are worn down enough that stamina will not refill past {ceiling}%.";
+        }
+
+        private static string AfflictionLine(PeakPlayerState state)
+        {
+            string described = PeakAfflictions.Describe(state.Afflictions);
+            return described.Length == 0 ? string.Empty : $"What is wrong with you: {described}.";
         }
 
         private static string InventoryLine(PeakPlayerState state)
@@ -149,13 +268,16 @@ namespace NeuroPeak.Perception
                 ? $"You are holding the {state.HeldItemName}"
                 : "Your hands are empty, so you can climb";
 
+            string backpack = hasBackpack
+                ? " You are wearing a backpack — `open_backpack` gets at what is inside it."
+                : string.Empty;
+
             if (carried.Count == 0)
             {
-                return hasBackpack ? $"{held}. Your bag is empty but you are wearing a backpack." : $"{held}, and your bag is empty.";
+                return $"{held}, and your own slots are empty.{backpack}";
             }
 
-            string bag = $"In your bag: {string.Join(", ", carried.ToArray())}";
-            return hasBackpack ? $"{held}. {bag}, plus a backpack." : $"{held}. {bag}.";
+            return $"{held}. In your bag: {string.Join(", ", carried.ToArray())}.{backpack}";
         }
 
         private static string HazardLine(PeakPlayerState state, float dropBelow)
@@ -305,6 +427,7 @@ namespace NeuroPeak.Perception
                 string condition = data.dead ? "dead"
                     : data.fullyPassedOut ? "fully passed out"
                     : data.passedOut ? "passed out"
+                    : data.isReaching ? "reaching out for a hand"
                     : data.isClimbing || data.isRopeClimbing || data.isVineClimbing ? "climbing"
                     : "on their feet";
 
@@ -314,7 +437,7 @@ namespace NeuroPeak.Perception
             return described;
         }
 
-        private static string BuildDigest(PeakPlayerState state, float dropBelow, List<SurfaceHit> surfaces, List<NearbyThing> things, List<string> teammates, AscentReading ascent)
+        private static string BuildDigest(PeakPlayerState state, float dropBelow, List<SurfaceHit> surfaces, List<NearbyThing> things, List<string> teammates, AscentReading ascent, WeatherSnapshot weather, List<ThreatReading> threats)
         {
             StringBuilder digest = new StringBuilder();
             digest.Append(state.SegmentName).Append('|')
@@ -326,16 +449,21 @@ namespace NeuroPeak.Perception
                 .Append(Bucket(state.Position.z, 15f)).Append('|')
                 .Append(Bucket(CompassDegrees(state.LookFlat), 45f)).Append('|')
                 .Append(ascent.Found ? RelativePosition.CompassOnly(ascent.Direction) : "flat").Append('|')
+                .Append(weather.Digest).Append('|')
+                .Append(state.ReachingTeammate).Append('|')
+                .Append(threats.Count).Append('|')
                 .Append(PostureKey(state)).Append('|')
                 .Append(Bucket(state.StaminaFraction * 100f, 20f)).Append('|')
                 .Append(Bucket(dropBelow, 10f)).Append('|')
                 .Append(state.InFog ? 1 : 0).Append('|')
                 .Append(Bucket(state.Injury * 100f, 25f)).Append('|')
+                .Append(state.Afflictions.Count).Append('|')
                 .Append(surfaces.Count).Append('|');
 
             foreach (SurfaceHit surface in surfaces) digest.Append(surface.Label).Append(',');
             digest.Append('|').Append(things.Count);
             foreach (NearbyThing thing in things) digest.Append(thing.Description).Append(',');
+            foreach (ThreatReading threat in threats) digest.Append(threat.Description).Append(',');
             digest.Append('|').Append(teammates.Count);
             foreach (string teammate in teammates) digest.Append(teammate).Append(',');
 

@@ -12,6 +12,8 @@ namespace NeuroPeak.Perception
         public const string ImminentFallKey = "imminent-fall";
         public const string LowStaminaKey = "low-stamina";
         public const string TeammateDownKey = "teammate-down";
+        public const string HandOutKey = "hand-out";
+        public const string HunterKey = "hunter";
 
         private static readonly Dictionary<string, float> LastSentAt = new Dictionary<string, float>();
 

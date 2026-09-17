@@ -20,7 +20,12 @@ namespace NeuroPeak.Actions
             InteractAction.ActionName,
             UseItemAction.ActionName,
             SelectSlotAction.ActionName,
-            DropItemAction.ActionName
+            DropItemAction.ActionName,
+            ReachAction.ActionName,
+            CrouchAction.ActionName,
+            PingAction.ActionName,
+            ThrowItemAction.ActionName,
+            OpenBackpackAction.ActionName
         };
 
         private bool _registered;
@@ -42,7 +47,7 @@ namespace NeuroPeak.Actions
                 _registered = true;
             }
 
-            if (!_briefed && PeakStateTracker.Current.InGame)
+            if (!_briefed && PeakStateTracker.Current.InRun)
             {
                 NeuroContext.SendAmbient(ControlBriefing());
                 _briefed = true;
@@ -98,7 +103,12 @@ namespace NeuroPeak.Actions
                 new InteractAction(),
                 new UseItemAction(),
                 new SelectSlotAction(),
-                new DropItemAction());
+                new DropItemAction(),
+                new ReachAction(),
+                new CrouchAction(),
+                new PingAction(),
+                new ThrowItemAction(),
+                new OpenBackpackAction());
         }
 
         private static string ControlBriefing()
@@ -113,8 +123,18 @@ namespace NeuroPeak.Actions
                 "**Climbing.** Face a wall and `grab` to latch on, then `move` to pull yourself along it. `sprint` while " +
                 "holding on gives you a hard push upwards. `release` lets go, and if you are high up that means falling. " +
                 "You need empty hands to climb, so put your item away first.\n\n" +
+                "**Your team.** If a teammate puts their hand out, `reach` back and you can grab each other — that is how you " +
+                "pull someone off a ledge or get hauled up yourself. Your hands have to be empty for it.\n\n" +
                 "**Stuff.** `interact` picks things up, opens chests and lights campfires. `select_slot` takes something " +
-                "out of your bag, `use_item` eats or uses it, `drop_item` throws it away.\n\n" +
+                "out of your bag, `use_item` eats or uses it, `drop_item` puts it down and `throw_item` lobs it at what " +
+                "you are looking at, which is how you pass something to someone out of reach.\n\n" +
+                "**Backpacks.** A backpack carries far more than your own slots. `open_backpack` gets into the one you are " +
+                "wearing or one you are looking at.\n\n" +
+                "**Other.** `crouch` steadies you on narrow ground. `ping` marks whatever you are looking at so the others " +
+                "can see it.\n\n" +
+                "**Weather.** The mountain has a day and night cycle, and storms blow through. When a storm hits, the wind " +
+                "pulls at you and hanging on costs far more stamina, so shelter or stop climbing until it passes. Fog is " +
+                "worse than it looks: get out of it. I will tell you when any of that changes.\n\n" +
                 "**Staying alive.** Holding onto a wall burns stamina fast, and when it runs out you fall. Stamina comes " +
                 "back on solid ground. Hunger, cold and injuries all shrink how much stamina you can have at all, so eat " +
                 "when you find food. Campfires are checkpoints, so lighting one matters.\n\n" +

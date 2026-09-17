@@ -15,7 +15,7 @@ namespace NeuroPeak.Actions
 
             if (!state.InGame)
             {
-                return ExecutionResult.Failure("You are not in a run right now, so there is nothing to control.");
+                return ExecutionResult.Failure("You are not in the game right now, so there is nothing to control.");
             }
 
             if (state.Dead)

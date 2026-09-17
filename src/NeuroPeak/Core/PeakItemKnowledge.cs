@@ -69,6 +69,15 @@ namespace NeuroPeak.Core
             {
             }
 
+            try
+            {
+                if (item.mustUseOnFriend) effects.Add("has to be used on a teammate");
+                else if (item.canUseOnFriend) effects.Add("can be used on a teammate too");
+            }
+            catch (Exception)
+            {
+            }
+
             return effects.Count == 0 ? string.Empty : string.Join(", ", effects.ToArray());
         }
 
