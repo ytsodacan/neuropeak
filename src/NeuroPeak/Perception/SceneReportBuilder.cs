@@ -195,7 +195,7 @@ namespace NeuroPeak.Perception
                 if (collider == null) continue;
                 if (PeakSurfaceProbe.BelongsToCharacter(collider)) continue;
 
-                Vector3 closest = collider.ClosestPoint(state.HeadPosition);
+                Vector3 closest = collider.bounds.ClosestPoint(state.HeadPosition);
                 Vector3 toSurface = closest - state.HeadPosition;
                 if (toSurface.sqrMagnitude < 0.01f) continue;
 
